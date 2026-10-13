@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from typing import Literal
 
@@ -55,3 +56,6 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+os.environ.setdefault("HF_HOME", str(ROOT / ".cache" / "huggingface"))
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
