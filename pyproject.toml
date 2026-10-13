@@ -8,6 +8,9 @@ version = "0.1.0"
 description = "Market-intelligence RAG over news, filings and central-bank documents with local GGUF SLMs and hybrid search"
 requires-python = ">=3.11,<3.13"
 
+[project.scripts]
+rag = "rag.cli:app"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

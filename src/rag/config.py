@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     models_dir: Path = ROOT / "models"
     fastembed_cache: Path = ROOT / ".cache" / "fastembed"
 
-    sec_user_agent: str = "Enterprise-RAG research contact@example.com"
+    contact: str = "anonymous"
     finnhub_api_key: str = ""
     marketaux_api_key: str = ""
 
@@ -32,6 +32,18 @@ class Settings(BaseSettings):
     @property
     def raw_dir(self) -> Path:
         return self.data_dir / "raw"
+
+    @property
+    def inbox_dir(self) -> Path:
+        return self.data_dir / "inbox"
+
+    @property
+    def catalog_path(self) -> Path:
+        return self.raw_dir / "catalog.db"
+
+    @property
+    def user_agent(self) -> str:
+        return f"EnterpriseRAG/0.1 (market-intelligence research; {self.contact})"
 
     @property
     def processed_dir(self) -> Path:
