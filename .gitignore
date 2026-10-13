@@ -9,3 +9,4 @@ models/*.gguf
 qdrant_storage/
 .pytest_cache/
 .ruff_cache/
+*.egg-info/
