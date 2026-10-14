@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { PanelLeft } from 'lucide-react';
+import { Eraser, PanelLeft } from 'lucide-react';
 import type { Chat, Source } from '../../types';
 import { ChatMessage } from './ChatMessage';
 import { Composer } from './Composer';
@@ -11,6 +11,7 @@ interface ChatPanelProps {
   onToggleSidebar: () => void;
   onSend: (text: string) => void;
   onCiteClick: (source: Source) => void;
+  onClearChat: () => void;
   isSearching: boolean;
   isStreaming: boolean;
 }
@@ -20,6 +21,7 @@ export function ChatPanel({
   onToggleSidebar,
   onSend,
   onCiteClick,
+  onClearChat,
   isSearching,
   isStreaming,
 }: ChatPanelProps) {
@@ -37,6 +39,17 @@ export function ChatPanel({
         <button className="icon-btn" aria-label="Toggle sidebar" onClick={onToggleSidebar}>
           <PanelLeft size={18} strokeWidth={1.5} />
         </button>
+        {hasMessages && (
+          <button
+            className="icon-btn"
+            aria-label="Clear chat"
+            title="Clear chat"
+            onClick={onClearChat}
+            style={{ marginLeft: 'auto' }}
+          >
+            <Eraser size={17} strokeWidth={1.5} />
+          </button>
+        )}
       </div>
 
       {hasMessages ? (

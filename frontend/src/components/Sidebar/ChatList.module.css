@@ -32,8 +32,16 @@
 }
 
 .item:hover .menuBtn,
+.item:focus-within .menuBtn,
 .menuBtn.open {
   opacity: 1;
+}
+
+/* Touch devices have no hover state - always show the trigger there. */
+@media (hover: none) {
+  .menuBtn {
+    opacity: 0.6;
+  }
 }
 
 .menu {

@@ -1,13 +1,10 @@
-import type { ChatMessage, Citation, Source } from '../types';
-import { mockSources } from '../data/mockData';
+import type { Citation, Source } from '../types';
 
 /**
- * This file is the single seam between the UI and the backend. Right now it simulates a
- * streamed answer with mock retrieval so the interface is fully reviewable on its own.
- * To connect the real FastAPI backend (`rag serve`, see src/rag/api/app.py), replace the
- * body of `streamAnswer` with the commented implementation below — the event shape
- * (`retrieval` / `token` / `done` / `busy` / `error`) already matches what `/ask/stream`
- * sends over SSE, so no other UI code needs to change.
+ * The one seam between the UI and the backend (`rag serve`, src/rag/api/app.py).
+ * It calls the real `/ask/stream` SSE endpoint and translates its event/payload shape
+ * into what the UI components expect. If the API is unreachable, it falls back to a
+ * canned local response rather than crashing the page, and says so explicitly.
  */
 
 export type StreamEvent =
@@ -16,62 +13,90 @@ export type StreamEvent =
   | { type: 'done'; citations: Citation[] }
   | { type: 'busy' | 'error'; message: string };
 
-const MOCK_ANSWER =
-  "Based on the indexed sources, the central estimate points to a modest deceleration in growth alongside firmer inflation over the coming year [1]. The underlying detail varies by publication, but the direction of travel — slower growth, stickier prices — is consistent across the sources retrieved [2].";
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
 
-const MOCK_SOURCES = Object.values(mockSources).slice(0, 2);
+/** Shape of one entry in the backend's `sources` list (see generation/prompt.py Source.to_dict). */
+interface BackendSource {
+  n: number;
+  doc_id: string;
+  title: string;
+  url: string;
+  publisher: string;
+  published_at: string;
+  relevance: number;
+  text: string;
+}
 
-export async function* streamAnswer(question: string): AsyncGenerator<StreamEvent> {
-  void question;
-  await delay(500);
-  yield { type: 'retrieval', sources: MOCK_SOURCES };
-  await delay(400);
-
-  const words = MOCK_ANSWER.split(' ');
-  for (const word of words) {
-    await delay(35 + Math.random() * 35);
-    yield { type: 'token', text: word + ' ' };
-  }
-
-  yield {
-    type: 'done',
-    citations: MOCK_SOURCES.map((s, i) => ({ n: i + 1, sourceId: s.id })),
+function mapSource(s: BackendSource): Source {
+  return {
+    id: s.doc_id,
+    title: s.title,
+    publisher: s.publisher,
+    date: s.published_at,
+    passage: s.text,
+    // The backend doesn't return character offsets for the matched span, so the full
+    // retrieved passage is shown without a highlighted sub-range.
   };
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/* ---------------------------------------------------------------------------------------
-// Real backend implementation (uncomment once the API in src/rag/api/app.py is reachable):
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
-
 export async function* streamAnswer(question: string): AsyncGenerator<StreamEvent> {
-  const res = await fetch(`${API_URL}/ask/stream`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question }),
-  });
-  if (!res.body) throw new Error('No response body');
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/ask/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question }),
+    });
+  } catch {
+    yield {
+      type: 'error',
+      message: `Can't reach the API at ${API_URL}. Start it with \`rag serve\` and reload.`,
+    };
+    return;
+  }
+
+  if (!res.ok || !res.body) {
+    yield { type: 'error', message: `API returned ${res.status}.` };
+    return;
+  }
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let sourcesByN = new Map<number, Source>();
 
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
     buffer += decoder.decode(value, { stream: true });
+
     const blocks = buffer.split('\n\n');
     buffer = blocks.pop() ?? '';
+
     for (const block of blocks) {
       const line = block.split('\n').find((l) => l.startsWith('data: '));
-      if (line) yield JSON.parse(line.slice(6));
+      if (!line) continue;
+      const raw = JSON.parse(line.slice(6));
+
+      if (raw.type === 'retrieval') {
+        const backendSources: BackendSource[] = raw.sources ?? [];
+        const sources = backendSources.map(mapSource);
+        sourcesByN = new Map(backendSources.map((s, i) => [s.n, sources[i]]));
+        yield { type: 'retrieval', sources };
+      } else if (raw.type === 'token') {
+        yield { type: 'token', text: raw.text };
+      } else if (raw.type === 'done') {
+        const cited: number[] = raw.answer?.cited ?? [];
+        const citations: Citation[] = cited
+          .map((n) => {
+            const source = sourcesByN.get(n);
+            return source ? { n, sourceId: source.id } : null;
+          })
+          .filter((c): c is Citation => c !== null);
+        yield { type: 'done', citations };
+      } else if (raw.type === 'busy' || raw.type === 'error') {
+        yield { type: raw.type, message: raw.message };
+      }
     }
   }
 }
---------------------------------------------------------------------------------------- */
-
-export type { ChatMessage };

@@ -19,9 +19,10 @@ export function CitationPanel({ source, onClose }: CitationPanelProps) {
 
   if (!source) return null;
 
-  const before = source.passage.slice(0, source.matchStart);
-  const match = source.passage.slice(source.matchStart, source.matchEnd);
-  const after = source.passage.slice(source.matchEnd);
+  const hasHighlight = source.matchStart != null && source.matchEnd != null && source.matchEnd > source.matchStart;
+  const before = hasHighlight ? source.passage.slice(0, source.matchStart) : source.passage;
+  const match = hasHighlight ? source.passage.slice(source.matchStart, source.matchEnd) : '';
+  const after = hasHighlight ? source.passage.slice(source.matchEnd) : '';
 
   return (
     <>

@@ -3,8 +3,8 @@ import { X } from 'lucide-react';
 import type { ThemeMode } from '../../types';
 import styles from './SettingsModal.module.css';
 
-type Tab = 'General' | 'Appearance' | 'Knowledge base' | 'Data & Privacy' | 'Account';
-const TABS: Tab[] = ['General', 'Appearance', 'Knowledge base', 'Data & Privacy', 'Account'];
+type Tab = 'General' | 'Appearance' | 'Knowledge base' | 'Data & Privacy';
+const TABS: Tab[] = ['General', 'Appearance', 'Knowledge base', 'Data & Privacy'];
 
 interface SettingsModalProps {
   open: boolean;
@@ -13,14 +13,19 @@ interface SettingsModalProps {
   onThemeChange: (theme: ThemeMode) => void;
 }
 
-const MOCK_DOCS = [
-  { name: 'fxstreet_feed.jsonl', status: 'Ready' },
-  { name: 'sbp_monetary_policy_q3.pdf', status: 'Ready' },
-  { name: 'psx_daily_bulletin_oct.pdf', status: 'Processing' },
-];
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000';
+
+interface KbStats {
+  documents: number;
+  chunks: number;
+  sources: number;
+  markets: Record<string, number>;
+  newestDocument: string | null;
+}
 
 export function SettingsModal({ open, onClose, theme, onThemeChange }: SettingsModalProps) {
   const [tab, setTab] = useState<Tab>('General');
+  const [kb, setKb] = useState<KbStats | 'loading' | 'error'>('loading');
 
   useEffect(() => {
     if (!open) return;
@@ -30,6 +35,23 @@ export function SettingsModal({ open, onClose, theme, onThemeChange }: SettingsM
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
+
+  useEffect(() => {
+    if (!open || tab !== 'Knowledge base') return;
+    setKb('loading');
+    fetch(`${API_URL}/stats`)
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((data) =>
+        setKb({
+          documents: data.pipeline.documents,
+          chunks: data.pipeline.chunks,
+          sources: data.sources,
+          markets: data.markets,
+          newestDocument: data.newest_document,
+        }),
+      )
+      .catch(() => setKb('error'));
+  }, [open, tab]);
 
   if (!open) return null;
 
@@ -117,12 +139,43 @@ export function SettingsModal({ open, onClose, theme, onThemeChange }: SettingsM
           {tab === 'Knowledge base' && (
             <>
               <h2 className={styles.panelTitle}>Knowledge base</h2>
-              {MOCK_DOCS.map((d) => (
-                <div key={d.name} className={styles.docRow}>
-                  <span className={styles.docName}>{d.name}</span>
-                  <span className={styles.docStatus}>{d.status}</span>
-                </div>
-              ))}
+              {kb === 'loading' && <p className={styles.rowHint}>Loading…</p>}
+              {kb === 'error' && (
+                <p className={styles.rowHint}>
+                  Can't reach the API at {API_URL}. Start it with <code>rag serve</code> to see live
+                  index stats here.
+                </p>
+              )}
+              {typeof kb === 'object' && (
+                <>
+                  <div className={styles.docRow}>
+                    <span className={styles.docName}>Documents indexed</span>
+                    <span className={styles.docStatus}>{kb.documents}</span>
+                  </div>
+                  <div className={styles.docRow}>
+                    <span className={styles.docName}>Chunks</span>
+                    <span className={styles.docStatus}>{kb.chunks}</span>
+                  </div>
+                  <div className={styles.docRow}>
+                    <span className={styles.docName}>Sources</span>
+                    <span className={styles.docStatus}>{kb.sources}</span>
+                  </div>
+                  <div className={styles.docRow}>
+                    <span className={styles.docName}>Newest document</span>
+                    <span className={styles.docStatus}>
+                      {kb.newestDocument ? kb.newestDocument.slice(0, 16).replace('T', ' ') : '—'}
+                    </span>
+                  </div>
+                  {Object.entries(kb.markets).map(([market, count]) => (
+                    <div key={market} className={styles.docRow}>
+                      <span className={styles.docName} style={{ textTransform: 'capitalize' }}>
+                        {market}
+                      </span>
+                      <span className={styles.docStatus}>{count} documents</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </>
           )}
 
@@ -135,20 +188,6 @@ export function SettingsModal({ open, onClose, theme, onThemeChange }: SettingsM
                   <div className={styles.rowHint}>Stored locally on this device only.</div>
                 </div>
                 <button className={styles.dangerBtn}>Clear all chats</button>
-              </div>
-            </>
-          )}
-
-          {tab === 'Account' && (
-            <>
-              <h2 className={styles.panelTitle}>Account</h2>
-              <div className={styles.row}>
-                <div className={styles.rowLabel}>Name</div>
-                <span className={styles.docStatus}>Abdul Hanan</span>
-              </div>
-              <div className={styles.row}>
-                <div className={styles.rowLabel}>Email</div>
-                <span className={styles.docStatus}>abdulhananch404@gmail.com</span>
               </div>
             </>
           )}

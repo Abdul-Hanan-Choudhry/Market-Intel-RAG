@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import { Search, SquarePen } from 'lucide-react';
+import { useState } from 'react';
+import { Search, Settings, SquarePen } from 'lucide-react';
 import type { Chat } from '../../types';
 import { ChatList } from './ChatList';
 import styles from './Sidebar.module.css';
@@ -28,18 +28,6 @@ export function Sidebar({
   onCollapse,
 }: SidebarProps) {
   const [query, setQuery] = useState('');
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const userRowRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (userRowRef.current && !userRowRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', onClickOutside);
-    return () => document.removeEventListener('mousedown', onClickOutside);
-  }, []);
 
   const filtered = query.trim()
     ? chats.filter((c) => c.title.toLowerCase().includes(query.trim().toLowerCase()))
@@ -79,36 +67,11 @@ export function Sidebar({
         />
       </nav>
 
-      <div className={styles.userRow} ref={userRowRef}>
-        <button
-          style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flex: 1 }}
-          onClick={() => setUserMenuOpen((v) => !v)}
-          aria-haspopup="menu"
-          aria-expanded={userMenuOpen}
-        >
-          <span className={styles.avatar}>AH</span>
-          <span className={styles.userName}>Abdul Hanan</span>
-        </button>
-
-        {userMenuOpen && (
-          <div className={styles.userMenu} role="menu">
-            <button
-              className={styles.userMenuItem}
-              role="menuitem"
-              onClick={() => {
-                onOpenSettings();
-                setUserMenuOpen(false);
-              }}
-            >
-              Settings
-            </button>
-            <button className={styles.userMenuItem} role="menuitem">
-              Log out
-            </button>
-          </div>
-        )}
-      </div>
-      </aside>
+      <button className={styles.settingsRow} onClick={onOpenSettings}>
+        <Settings size={16} strokeWidth={1.5} />
+        Settings
+      </button>
+    </aside>
     </>
   );
 }

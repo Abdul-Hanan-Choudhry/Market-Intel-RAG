@@ -12,16 +12,18 @@ npm install
 npm run dev       # http://localhost:5173
 ```
 
-It runs fully on **mock data** (`src/data/mockData.ts`, `src/services/api.ts`) so the UI
-is reviewable without the Python backend running.
+It talks to the **real backend** by default: `src/services/api.ts` calls the FastAPI
+`POST /ask/stream` SSE endpoint and the Settings → Knowledge base tab reads `GET /stats`,
+so answers, citations, and document counts are all live and grounded in the actual index —
+nothing in the running app is mocked. `src/data/mockData.ts` is kept only as example
+content for offline component development; it is not used by the app anymore.
 
 ## Wiring up the real backend
 
-Everything the UI needs from the backend goes through `src/services/api.ts`. Start
-`rag serve` (see the project root README), then swap the mock `streamAnswer` for the real
-implementation already written (commented) at the bottom of that file — it calls the
-existing `POST /ask/stream` SSE endpoint, whose event shape (`retrieval` / `token` / `done`
-/ `busy` / `error`) is what the UI already expects, so no component changes are needed.
+Start `rag serve` (see the project root README) before `npm run dev` — the API must be
+running at `http://127.0.0.1:8000` (its CORS config already allows `localhost:5173`). If
+it isn't reachable, the chat and Knowledge base tab show an inline "Can't reach the API…"
+message instead of failing silently.
 
 ```bash
 # optional: point at a non-default API host
@@ -35,14 +37,14 @@ src/
   styles/tokens.css        colors, spacing, radius, type scale (light + dark via CSS vars)
   styles/global.css        resets, focus rings, a few shared utility classes
   types.ts                 Chat, ChatMessage, Source, Citation, UploadedFile
-  data/mockData.ts         mock chat history + source passages
-  services/api.ts          streamAnswer() — the one seam to the real backend
+  data/mockData.ts         example chat history (unused at runtime, kept for reference)
+  services/api.ts          streamAnswer() — calls the real POST /ask/stream SSE endpoint
   utils/groupChats.ts      Today / Yesterday / Previous 7 days / Older grouping
   components/
-    Sidebar/                Sidebar, ChatList (search, history, rename/delete, user menu)
-    Chat/                   ChatPanel, ChatMessage, Composer, EmptyState
+    Sidebar/                Sidebar, ChatList (search, history, rename/delete)
+    Chat/                   ChatPanel (incl. Clear chat), ChatMessage, Composer, EmptyState
     CitationPanel/           right-side panel showing the highlighted source passage
-    Settings/                SettingsModal (General, Appearance, Knowledge base, Data & Privacy, Account)
+    Settings/                SettingsModal (General, Appearance, Knowledge base — live /stats, Data & Privacy)
   App.tsx                   state + wiring (no routing library needed for one screen)
 ```
 

@@ -7,9 +7,9 @@ export interface Source {
   section?: string;
   date?: string;
   passage: string;
-  /** Substring of `passage` to highlight as the matching text. */
-  matchStart: number;
-  matchEnd: number;
+  /** Substring of `passage` to highlight as the matching text (omitted = no highlight). */
+  matchStart?: number;
+  matchEnd?: number;
 }
 
 export interface Citation {

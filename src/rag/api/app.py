@@ -22,6 +22,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -63,6 +64,14 @@ def create_app(answerer: Answerer | None = None, catalog=None, warmup: bool = Tr
         yield
 
     app = FastAPI(title="Enterprise RAG - market intelligence", version="0.1.0", lifespan=lifespan)
+    # The frontend (Vite dev server / any static build) runs on a different origin than
+    # the API, so the browser needs an explicit CORS allowance to call /ask/stream etc.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     # The local Qdrant store and ONNX sessions are not meant for concurrent writers/readers
     # from many threads; one retrieval at a time costs ~2 s and keeps things safe.
     retrieval_lock = threading.Lock()

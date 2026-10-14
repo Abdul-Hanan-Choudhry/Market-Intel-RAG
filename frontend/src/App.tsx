@@ -51,6 +51,11 @@ export default function App() {
     updateChat(id, (c) => ({ ...c, title }));
   }
 
+  function handleClearChat() {
+    if (!activeId) return;
+    updateChat(activeId, (c) => ({ ...c, messages: [] }));
+  }
+
   async function handleSend(text: string) {
     let chatId = activeId;
 
@@ -138,6 +143,7 @@ export default function App() {
         onToggleSidebar={() => setSidebarCollapsed((v) => !v)}
         onSend={handleSend}
         onCiteClick={setCitationSource}
+        onClearChat={handleClearChat}
         isSearching={isSearching}
         isStreaming={isStreaming}
       />
