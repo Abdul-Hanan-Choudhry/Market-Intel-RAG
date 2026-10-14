@@ -6,7 +6,9 @@
     {"type": "done", "answer": {...}}  final answer with citations and timings
 """
 
+import queue
 import re
+import threading
 import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
@@ -19,6 +21,41 @@ from rag.index.vector_store import SearchFilters
 from rag.retrieval.retriever import RetrievalResult, Retriever
 
 _CITATION = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+
+
+def _with_stall_timeout(gen: Iterator, timeout_s: float) -> Iterator:
+    """Run `gen` on a worker thread and raise TimeoutError if it stops producing items.
+
+    llama.cpp can occasionally stall (e.g. starved of CPU by other processes) without
+    raising a Python exception - the generator simply never yields again. A plain
+    `for x in gen` can't detect that because it blocks forever on the next item. Running
+    the generator on its own thread lets us use `queue.get(timeout=...)` as a watchdog.
+    Note: if the C call really is stuck, the worker thread is leaked (not killable from
+    Python) until the process restarts - but the caller gets a timely error either way.
+    """
+    q: queue.Queue = queue.Queue(maxsize=1)
+
+    def worker() -> None:
+        try:
+            for item in gen:
+                q.put(("item", item))
+            q.put(("done", None))
+        except Exception as exc:  # noqa: BLE001 - forwarded to the consumer, not swallowed
+            q.put(("error", exc))
+
+    threading.Thread(target=worker, daemon=True).start()
+    while True:
+        try:
+            kind, value = q.get(timeout=timeout_s)
+        except queue.Empty as exc:
+            raise TimeoutError(f"no output for {timeout_s:.0f}s - the model may be stuck "
+                                f"(try restarting `rag serve`)") from exc
+        if kind == "item":
+            yield value
+        elif kind == "error":
+            raise value
+        else:
+            return
 
 
 def parse_citations(text: str) -> list[int]:
@@ -111,9 +148,15 @@ class Answerer:
         messages = build_messages(question, sources, now)
         stats = GenerationStats()
         parts = []
-        for token in self.llm.stream(messages, stats):
-            parts.append(token)
-            yield {"type": "token", "text": token}
+        try:
+            raw = self.llm.stream(messages, stats)
+            for token in _with_stall_timeout(raw, settings.llm_stall_timeout_s):
+                parts.append(token)
+                yield {"type": "token", "text": token}
+        except TimeoutError as exc:
+            timings["total"] = (time.perf_counter() - t0) * 1000
+            yield {"type": "error", "message": str(exc), "partial_answer": "".join(parts).strip()}
+            return
         text = "".join(parts).strip()
 
         cited = parse_citations(text)

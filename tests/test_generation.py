@@ -1,3 +1,4 @@
+import threading
 from datetime import UTC, datetime
 
 from rag.generation.answer import Answerer, is_refusal, parse_citations
@@ -93,6 +94,26 @@ def test_irrelevant_retrieval_refuses_without_calling_llm():
     answer = Answerer(FakeRetriever([_chunk("a", 0, "biryani recipe", relevance=0.0001)]), llm).answer("q")
     assert answer["refused"] and llm.calls == 0
     assert answer["answer"] == REFUSAL
+
+
+class StallingLLM(FakeLLM):
+    """Yields one token then hangs forever, simulating a stuck llama.cpp call."""
+
+    def stream(self, messages, stats, max_tokens=None, temperature=None):
+        yield "partial "
+        stats.completion_tokens += 1
+        threading.Event().wait()  # never returns
+
+
+def test_stall_is_reported_instead_of_hanging_forever():
+    from rag import config
+    config.settings.llm_stall_timeout_s = 0.3
+
+    events = list(Answerer(FakeRetriever([_chunk("a", 0, "text")]), StallingLLM("")).stream("q", now=NOW))
+    assert events[-1]["type"] == "error"
+    assert "stuck" in events[-1]["message"]
+    assert events[-1]["partial_answer"] == "partial"
+    config.settings.llm_stall_timeout_s = 150.0
 
 
 def test_model_refusal_is_detected():

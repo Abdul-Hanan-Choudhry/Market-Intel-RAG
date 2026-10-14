@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # costs ~5 s before the first word appears. Raise these on a GPU / remote backend.
     context_token_budget: int = 1200
     answer_k: int = 4
+    # If no new token arrives for this long, something is stuck (e.g. CPU starved by other
+    # processes) - report an error instead of hanging the UI forever.
+    llm_stall_timeout_s: float = 150.0
     # Below this cross-encoder probability nothing retrieved is about the question: refuse
     # without calling the LLM (calibrated with `rag calibrate-refusal`).
     refuse_below: float = 0.02

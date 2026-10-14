@@ -144,8 +144,12 @@ if question:
                 elif event["type"] == "done":
                     answer = event["answer"]
                 elif event["type"] == "error":
+                    status.update(label="Stalled", state="error")
                     st.error(event["message"])
+                    if event.get("partial_answer"):
+                        st.caption(f"Partial output before the stall: {event['partial_answer']!r}")
         except httpx.HTTPError as exc:
+            status.update(label="Failed", state="error")
             st.error(f"Could not reach the API: {exc}")
         if answer:
             status.update(label="Done", state="complete")

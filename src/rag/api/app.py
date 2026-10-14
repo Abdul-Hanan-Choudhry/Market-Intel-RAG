@@ -21,7 +21,7 @@ from collections.abc import Iterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -106,6 +106,8 @@ def create_app(answerer: Answerer | None = None, catalog=None, warmup: bool = Tr
         for event in _events(q, request):
             if event["type"] == "done":
                 return event["answer"]
+            if event["type"] == "error":
+                raise HTTPException(status_code=504, detail=event["message"])
         raise RuntimeError("answer stream ended without a result")
 
     @app.post("/ask/stream")

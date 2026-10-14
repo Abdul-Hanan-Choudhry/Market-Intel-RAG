@@ -254,6 +254,10 @@ def ask(
                 console.print("[dim]generating (the first word takes longest on CPU)...[/]\n")
         elif event["type"] == "token":
             console.print(event["text"], end="", highlight=False, markup=False)
+        elif event["type"] == "error":
+            console.print(f"\n[red]error:[/] {event['message']}")
+            if event.get("partial_answer"):
+                console.print(f"[dim]partial output before the stall: {event['partial_answer']!r}[/]")
         else:
             a = event["answer"]
             if not a["generation"]:  # refused before generation
