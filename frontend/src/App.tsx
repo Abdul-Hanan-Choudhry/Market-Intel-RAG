@@ -3,8 +3,8 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { ChatPanel } from './components/Chat/ChatPanel';
 import { CitationPanel } from './components/CitationPanel/CitationPanel';
 import { SettingsModal } from './components/Settings/SettingsModal';
-import { mockChats } from './data/mockData';
 import { streamAnswer } from './services/api';
+import { loadActiveId, loadChats, loadTheme, saveActiveId, saveChats, saveTheme } from './utils/storage';
 import type { Chat, ChatMessage, Source, ThemeMode } from './types';
 import './styles/global.css';
 
@@ -17,18 +17,31 @@ function newMessageId() {
 }
 
 export default function App() {
-  const [chats, setChats] = useState<Chat[]>(mockChats);
-  const [activeId, setActiveId] = useState<string | null>(mockChats[0]?.id ?? null);
+  const [chats, setChats] = useState<Chat[]>(() => loadChats());
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    const saved = loadActiveId();
+    const initialChats = loadChats();
+    return saved && initialChats.some((c) => c.id === saved) ? saved : null;
+  });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => window.innerWidth <= 760);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [citationSource, setCitationSource] = useState<Source | null>(null);
-  const [theme, setTheme] = useState<ThemeMode>('light');
+  const [theme, setTheme] = useState<ThemeMode>(() => loadTheme());
   const [isSearching, setIsSearching] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme);
+    saveTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    saveChats(chats);
+  }, [chats]);
+
+  useEffect(() => {
+    saveActiveId(activeId);
+  }, [activeId]);
 
   const activeChat = chats.find((c) => c.id === activeId) ?? null;
 
