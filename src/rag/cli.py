@@ -171,6 +171,133 @@ def search(
 
 
 @app.command()
+def retrieve(question: str, k: int = 5) -> None:
+    """Phase 4: run the full retrieval pipeline and show every scoring signal."""
+    from rag.retrieval.retriever import Retriever
+
+    result = Retriever().retrieve(question, k=k)
+    console.print(f"[bold]Plan:[/] {result.plan.describe()}")
+    t = result.timings_ms
+    table = Table("#", "relevance", "recency", "boost", "score", "date", "publisher", "title / snippet",
+                  title=f"{result.n_candidates} candidates | search {t['search']:.0f} ms | rerank {t['rerank']:.0f} ms")
+    for i, c in enumerate(result.chunks, 1):
+        p = c.payload
+        table.add_row(str(i), f"{c.relevance:.3f}", f"{c.recency:.2f}", f"{c.boost:.2f}", f"{c.score:.3f}",
+                      p["published_at"][:10], p["publisher"][:14],
+                      f"[bold]{p['title'][:70]}[/]\n[dim]{' '.join(c.hit.text.split())[:140]}[/]")
+    console.print(table)
+
+
+@app.command("eval-retrieval")
+def eval_retrieval(
+    config: Annotated[list[str] | None, typer.Option("--config", "-c")] = None,
+    details: Annotated[bool, typer.Option(help="Show rank of the first relevant doc per question")] = False,
+) -> None:
+    """Phase 4: score retrieval configurations on the labelled question set."""
+    from rag.retrieval.evaluate import CONFIGS, evaluate
+    from rag.retrieval.retriever import Retriever
+
+    configs = {k: v for k, v in CONFIGS.items() if not config or k in config}
+    rows = evaluate(Retriever(), configs)
+    table = Table("config", "Hit@1", "Hit@5", "MRR", "ms/query", title="Retrieval quality (20 questions)")
+    for r in rows:
+        table.add_row(r.config, f"{r.hit1:.0%}", f"{r.hit5:.0%}", f"{r.mrr:.3f}", f"{r.ms_per_query:.0f}")
+    console.print(table)
+    for r in rows:
+        if r.misses:
+            console.print(f"[yellow]{r.config}[/] missed top-5: " + " | ".join(m[:50] for m in r.misses))
+    if details:
+        detail = Table("question", *[r.config for r in rows], title="Rank of first relevant document")
+        for q in rows[0].ranks:
+            detail.add_row(q[:60], *[str(r.ranks[q] or "-") for r in rows])
+        console.print(detail)
+
+
+@app.command("calibrate-refusal")
+def calibrate_refusal() -> None:
+    """Phase 5: compare reranker relevance for answerable vs off-topic questions."""
+    from rag.retrieval.evaluate import OFF_TOPIC, load_questions
+    from rag.retrieval.retriever import Retriever
+
+    retriever = Retriever()
+    groups = {"on-topic": [q["question"] for q in load_questions()], "off-topic": OFF_TOPIC}
+    table = Table("group", "question", "best relevance", "refused?", title=f"refuse_below = {settings.refuse_below}")
+    for group, questions in groups.items():
+        for q in questions:
+            best = retriever.retrieve(q, k=settings.answer_k).best_relevance
+            table.add_row(group, q[:70], f"{best:.4f}", "yes" if best < settings.refuse_below else "")
+    console.print(table)
+
+
+@app.command()
+def ask(
+    question: str,
+    k: Annotated[int, typer.Option(help="Chunks to retrieve")] = settings.answer_k,
+    market: Annotated[list[str] | None, typer.Option("--market", "-m")] = None,
+    show_prompt: Annotated[bool, typer.Option(help="Print the exact source text the LLM sees")] = False,
+) -> None:
+    """Phase 5: answer a question from the indexed documents, with citations."""
+    from rag.generation.answer import Answerer
+    from rag.index.vector_store import SearchFilters
+
+    filters = SearchFilters(markets=market) if market else None
+    console.print("[dim]retrieving...[/]")
+    for event in Answerer().stream(question, k=k, filters=filters):
+        if event["type"] == "retrieval":
+            console.print(f"[bold]Plan:[/] {event['plan']['description']}")
+            for s in event["sources"]:
+                console.print(f"  [cyan][{s['n']}][/] {s['title'][:80]} [dim]({s['publisher']}, "
+                              f"{s['published_at']}, relevance {s['relevance']:.2f})[/]")
+                if show_prompt:
+                    console.print(f"[dim]{s['text']}[/]")
+            if event["sources"]:
+                console.print("[dim]generating (the first word takes longest on CPU)...[/]\n")
+        elif event["type"] == "token":
+            console.print(event["text"], end="", highlight=False, markup=False)
+        else:
+            a = event["answer"]
+            if not a["generation"]:  # refused before generation
+                console.print(f"[yellow]{a['answer']}[/]\n[dim]{a['refusal_reason']}[/]")
+            t, g = a["timings_ms"], a["generation"]
+            console.print()
+            for w in a["warnings"]:
+                console.print(f"[yellow]warning:[/] {w}")
+            for s in a["sources"]:
+                if s["n"] in a["cited"]:
+                    console.print(f"[cyan][{s['n']}][/] {s['url']}")
+            timing = f"retrieval {t.get('retrieval_search', 0) + t.get('retrieval_rerank', 0):.0f} ms"
+            if g:
+                timing += (f" | first token {g['time_to_first_token_ms'] / 1000:.1f} s | "
+                           f"{g['completion_tokens']} tokens at {g['tokens_per_second']} tok/s | "
+                           f"prompt ~{g['prompt_tokens']} tokens | {a['model']}")
+            console.print(f"[dim]{timing} | total {t['total'] / 1000:.1f} s[/]")
+
+
+@app.command()
+def serve(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+) -> None:
+    """Phase 6: start the HTTP API (models load once, at startup)."""
+    import uvicorn
+
+    # One worker: each worker would load its own copy of the LLM and lock the local Qdrant store.
+    uvicorn.run("rag.api.app:app", host=host, port=port, workers=1, log_level="info")
+
+
+@app.command()
+def ui(port: int = 8501) -> None:
+    """Phase 6: start the Streamlit chat UI (needs `rag serve` running)."""
+    import subprocess
+    import sys
+
+    from rag.config import ROOT
+
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(ROOT / "ui" / "app.py"),
+                    "--server.port", str(port), "--browser.gatherUsageStats", "false"], check=False)
+
+
+@app.command()
 def status() -> None:
     """Pipeline status across all phases."""
     from rag.index.vector_store import VectorStore

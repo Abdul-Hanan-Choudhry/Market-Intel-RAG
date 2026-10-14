@@ -30,6 +30,32 @@ class Settings(BaseSettings):
     llm_ctx: int = 4096
     llm_threads: int = 4
 
+    # Retrieval (Phase 4)
+    rerank_candidates: int = 20
+    rerank_max_chars: int = 1200
+    recency_half_life_days: float = 7.0
+    recency_weight: float = 0.25
+    max_chunks_per_doc: int = 2
+
+    # Generation (Phase 5). "local" runs the GGUF in-process; "openai" calls any
+    # OpenAI-compatible server (llama.cpp server, Ollama, vLLM, Groq, OpenAI...).
+    llm_backend: Literal["local", "openai"] = "local"
+    llm_max_tokens: int = 300
+    llm_temperature: float = 0.1
+    # CPU prompt reading runs at ~20 tok/s for the 3B model, so every 100 context tokens
+    # costs ~5 s before the first word appears. Raise these on a GPU / remote backend.
+    context_token_budget: int = 1200
+    answer_k: int = 4
+    # Below this cross-encoder probability nothing retrieved is about the question: refuse
+    # without calling the LLM (calibrated with `rag calibrate-refusal`).
+    refuse_below: float = 0.02
+    openai_base_url: str = "http://localhost:11434/v1"
+    openai_api_key: str = "not-needed"
+    openai_model: str = "llama3.2:3b"
+
+    # Serving (Phase 6)
+    api_url: str = "http://127.0.0.1:8000"
+
     @property
     def raw_dir(self) -> Path:
         return self.data_dir / "raw"

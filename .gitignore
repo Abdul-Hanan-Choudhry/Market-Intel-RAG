@@ -6,6 +6,8 @@ __pycache__/
 data/raw/
 data/processed/
 models/*.gguf
+models/*.part
+models/.cache/
 qdrant_storage/
 .pytest_cache/
 .ruff_cache/
