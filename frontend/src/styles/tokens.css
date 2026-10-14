@@ -1,0 +1,91 @@
+/*
+  Design tokens — single source of truth for color, spacing, radius and type.
+  Light mode ships by default; dark mode activates via [data-theme="dark"] on <html>.
+*/
+
+:root {
+  /* ---- color: light (default) ---- */
+  --color-bg: #ffffff;
+  --color-bg-sidebar: #f9f9f8;
+  --color-bg-hover: #f0f0ee;
+  --color-bg-active: #ececea;
+  --color-bubble-user: #f2f2f0;
+  --color-border: #e8e8e6;
+  --color-border-strong: #d8d8d5;
+
+  --color-text-primary: #1a1a1a;
+  --color-text-secondary: #6b6b6b;
+  --color-text-tertiary: #9a9a98;
+  --color-text-on-accent: #ffffff;
+
+  --color-accent: #3a5bc7;
+  --color-accent-hover: #30499e;
+  --color-accent-soft: #eef1fb;
+
+  --color-highlight: #fff3b0;
+  --color-danger: #c0392b;
+
+  --focus-ring: 0 0 0 2px var(--color-bg), 0 0 0 4px var(--color-accent);
+
+  /* ---- spacing (4px grid) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+
+  /* ---- radius ---- */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* ---- type ---- */
+  --font-sans:
+    'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+
+  --text-xs: 12px;
+  --text-sidebar: 14px;
+  --text-body: 15.5px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+
+  --leading-body: 1.65;
+  --leading-tight: 1.3;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+
+  /* ---- motion ---- */
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-base: 200ms;
+
+  /* ---- layout ---- */
+  --sidebar-width: 268px;
+  --chat-max-width: 720px;
+  --citation-panel-width: 380px;
+}
+
+[data-theme='dark'] {
+  --color-bg: #1a1a1a;
+  --color-bg-sidebar: #151515;
+  --color-bg-hover: #242424;
+  --color-bg-active: #2a2a2a;
+  --color-bubble-user: #262626;
+  --color-border: #2a2a2a;
+  --color-border-strong: #3a3a3a;
+
+  --color-text-primary: #f2f2f0;
+  --color-text-secondary: #9a9a98;
+  --color-text-tertiary: #727270;
+
+  --color-accent: #6b86e0;
+  --color-accent-hover: #8198e8;
+  --color-accent-soft: #212a42;
+
+  --color-highlight: #4a3f1a;
+}
