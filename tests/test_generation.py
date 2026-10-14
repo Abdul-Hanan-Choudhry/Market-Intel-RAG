@@ -116,6 +116,18 @@ def test_stall_is_reported_instead_of_hanging_forever():
     config.settings.llm_stall_timeout_s = 150.0
 
 
+def test_busy_fails_fast_instead_of_waiting_for_stall_timeout():
+    from rag.generation.llm import Busy
+
+    class BusyLLM(FakeLLM):
+        def stream(self, messages, stats, max_tokens=None, temperature=None):
+            raise Busy("Still answering the previous question (running for 42s).")
+            yield  # pragma: no cover - makes this a generator function
+
+    events = list(Answerer(FakeRetriever([_chunk("a", 0, "text")]), BusyLLM("")).stream("q", now=NOW))
+    assert events[-1] == {"type": "busy", "message": "Still answering the previous question (running for 42s)."}
+
+
 def test_model_refusal_is_detected():
     answer = Answerer(FakeRetriever([_chunk("a", 0, "text")]), FakeLLM(REFUSAL)).answer("q", now=NOW)
     assert answer["refused"]

@@ -44,6 +44,21 @@ def test_ask_stream_sse(client):
     assert "".join(e["text"] for e in events if e["type"] == "token").strip() == events[-1]["answer"]["answer"]
 
 
+def test_ask_returns_429_when_busy(tmp_path):
+    from rag.generation.llm import Busy
+
+    class BusyLLM(FakeLLM):
+        def stream(self, messages, stats, max_tokens=None, temperature=None):
+            raise Busy("Still answering the previous question (running for 42s).")
+            yield  # pragma: no cover
+
+    app = create_app(answerer=Answerer(FakeRetriever([_chunk("a", 0, "text")]), BusyLLM("")),
+                     catalog=Catalog(tmp_path / "c.db"), warmup=False)
+    with TestClient(app) as c:
+        r = c.post("/ask", json={"question": "What did SBP do?"})
+    assert r.status_code == 429
+
+
 def test_validation(client):
     assert client.post("/ask", json={"question": "x"}).status_code == 422
     assert client.post("/ask", json={"question": "valid question", "k": 50}).status_code == 422

@@ -49,6 +49,15 @@ class LLM(Protocol):
                max_tokens: int | None = None, temperature: float | None = None) -> Iterator[str]: ...
 
 
+class Busy(Exception):
+    """Another request is already generating; this one did not even get to start.
+
+    Distinct from a mid-generation stall: being busy is normal under concurrent use and
+    should fail fast with a clear message, not sit silently for minutes before reporting
+    the misleading "model may be stuck".
+    """
+
+
 class LocalLlama:
     def __init__(self, model_path: str | None = None):
         from llama_cpp import Llama
@@ -57,16 +66,24 @@ class LocalLlama:
         self.name = f"local:{settings.llm_file}"
         # n_batch = how many prompt tokens are processed per step; bigger is faster on CPU up to a point.
         self.llm = Llama(model_path=path, n_ctx=settings.llm_ctx, n_threads=settings.llm_threads,
-                         n_batch=512, verbose=False)
+                         n_batch=1024, verbose=False)
         # llama.cpp keeps one KV cache per model instance, so only one generation at a time.
         self.lock = threading.Lock()
+        self._busy_for: float | None = None  # perf_counter() when the current call started
 
     def count_tokens(self, text: str) -> int:
         return len(self.llm.tokenize(text.encode(), add_bos=False, special=True))
 
     def stream(self, messages: list[Message], stats: GenerationStats,
                max_tokens: int | None = None, temperature: float | None = None) -> Iterator[str]:
-        with self.lock:
+        # Fail fast instead of silently waiting: a slow-but-healthy queue (one request
+        # already generating) should look nothing like a genuine stuck model.
+        if not self.lock.acquire(timeout=settings.llm_busy_wait_s):
+            waited = time.perf_counter() - (self._busy_for or time.perf_counter())
+            raise Busy(f"Still answering the previous question (running for {waited:.0f}s). "
+                       f"Please wait for it to finish before asking another.")
+        self._busy_for = time.perf_counter()
+        try:
             t0 = time.perf_counter()
             stats.prompt_tokens = sum(self.count_tokens(m["content"]) for m in messages)
             chunks = self.llm.create_chat_completion(
@@ -84,6 +101,9 @@ class LocalLlama:
                 stats.completion_tokens += 1
                 yield delta
             stats.total_ms = (time.perf_counter() - t0) * 1000
+        finally:
+            self._busy_for = None
+            self.lock.release()
 
 
 class OpenAICompatible:

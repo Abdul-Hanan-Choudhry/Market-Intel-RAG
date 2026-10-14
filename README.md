@@ -127,15 +127,17 @@ calling the LLM when nothing relevant was retrieved.
 
 **Generation speed** on a 4-core / 8-thread CPU laptop, no GPU:
 
-| Model | Prompt reading | Generation | Typical answer |
+| Model | Prompt reading | Generation | Typical answer (900-token context, 3 chunks) |
 |---|---|---|---|
-| Llama 3.2 **3B** Q4_K_M (default) | ~20 tok/s | ~4 tok/s | 60–105 s |
-| Llama 3.2 **1B** Q4_K_M (`LLM_FILE=...`) | ~37 tok/s | ~10 tok/s | ~35 s |
+| Llama 3.2 **1B** Q4_K_M (default) | ~37 tok/s | ~10 tok/s | **~20–30 s** |
+| Llama 3.2 **3B** Q4_K_M (higher quality, slower) | ~20 tok/s | ~4 tok/s | ~60–105 s |
 | Any OpenAI-compatible backend (Groq, Ollama+GPU, llama-server) | — | — | ~1–5 s |
 
-Because reading the prompt is the slow part, `CONTEXT_TOKEN_BUDGET` is tuned to ~1,200
-tokens (4 chunks) rather than a larger window — doubling it would roughly double the wait
-before the first word appears.
+Because reading the prompt is the slow part, `CONTEXT_TOKEN_BUDGET` is tuned down to ~900
+tokens (3 chunks) by default — doubling it would roughly double the wait before the first
+word appears. Switch to the 3B model (see `.env.example`) for noticeably better answers
+at ~3x the latency, or point `LLM_BACKEND=openai` at a GPU/hosted server to remove the
+CPU bottleneck entirely.
 
 ## Design decisions worth calling out
 
@@ -154,9 +156,13 @@ before the first word appears.
   `LLM_BACKEND=openai` talks to any OpenAI-compatible server (Ollama, llama-server, vLLM,
   Groq). Same prompt/retrieval code either way — this is how the same system would move
   from a laptop demo to a client's GPU box or a hosted API.
-- **Stall watchdog.** A CPU-only LLM can occasionally stall if starved of cores by other
-  processes. Generation runs on a worker thread with a timeout so a stuck model surfaces as
-  an error within ~2.5 minutes instead of hanging the UI forever.
+- **Stall watchdog + fast busy-detection.** Only one generation can run at a time (llama.cpp
+  holds a single KV cache). A plain lock would make a second question wait silently behind
+  the first, then falsely report "stuck" once the (unrelated) stall timeout elapsed. Instead,
+  acquiring the model lock itself times out quickly (a few seconds) and reports "busy,
+  please wait" immediately, while a separate, longer watchdog catches a genuinely stuck
+  generation (e.g. CPU starved by other processes) and reports it within ~2.5 minutes
+  instead of hanging the UI forever.
 - **Near-duplicate detection.** Wire services often republish the same story; MinHash
   similarity (threshold 0.7, 4-day window) merges near-duplicates, keeping the newest
   version.

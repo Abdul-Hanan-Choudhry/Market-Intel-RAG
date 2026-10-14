@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from rag.config import settings
-from rag.generation.llm import LLM, GenerationStats, get_llm
+from rag.generation.llm import LLM, Busy, GenerationStats, get_llm
 from rag.generation.prompt import REFUSAL, Source, build_messages, pack_sources
 from rag.index.vector_store import SearchFilters
 from rag.retrieval.retriever import RetrievalResult, Retriever
@@ -153,6 +153,10 @@ class Answerer:
             for token in _with_stall_timeout(raw, settings.llm_stall_timeout_s):
                 parts.append(token)
                 yield {"type": "token", "text": token}
+        except Busy as exc:
+            timings["total"] = (time.perf_counter() - t0) * 1000
+            yield {"type": "busy", "message": str(exc)}
+            return
         except TimeoutError as exc:
             timings["total"] = (time.perf_counter() - t0) * 1000
             yield {"type": "error", "message": str(exc), "partial_answer": "".join(parts).strip()}

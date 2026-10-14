@@ -73,8 +73,10 @@ def create_app(answerer: Answerer | None = None, catalog=None, warmup: bool = Tr
     @app.get("/health")
     def health(request: Request) -> dict:
         a = _answerer(request)
+        busy_for = getattr(a._llm, "_busy_for", None) if a._llm else None
         return {"status": "ok", "llm": a.llm_name or "not loaded",
-                "backend": settings.llm_backend, "qdrant_mode": settings.qdrant_mode}
+                "backend": settings.llm_backend, "qdrant_mode": settings.qdrant_mode,
+                "busy_for_s": round(time.perf_counter() - busy_for) if busy_for else None}
 
     @app.get("/stats")
     def stats(request: Request) -> dict:
@@ -106,6 +108,8 @@ def create_app(answerer: Answerer | None = None, catalog=None, warmup: bool = Tr
         for event in _events(q, request):
             if event["type"] == "done":
                 return event["answer"]
+            if event["type"] == "busy":
+                raise HTTPException(status_code=429, detail=event["message"])
             if event["type"] == "error":
                 raise HTTPException(status_code=504, detail=event["message"])
         raise RuntimeError("answer stream ended without a result")

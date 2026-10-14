@@ -254,6 +254,8 @@ def ask(
                 console.print("[dim]generating (the first word takes longest on CPU)...[/]\n")
         elif event["type"] == "token":
             console.print(event["text"], end="", highlight=False, markup=False)
+        elif event["type"] == "busy":
+            console.print(f"\n[yellow]busy:[/] {event['message']}")
         elif event["type"] == "error":
             console.print(f"\n[red]error:[/] {event['message']}")
             if event.get("partial_answer"):
