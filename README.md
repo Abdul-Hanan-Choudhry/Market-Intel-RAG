@@ -127,17 +127,19 @@ calling the LLM when nothing relevant was retrieved.
 
 **Generation speed** on a 4-core / 8-thread CPU laptop, no GPU:
 
-| Model | Prompt reading | Generation | Typical answer (900-token context, 3 chunks) |
+| Model | Prompt reading | Generation | Typical answer (1200-token context, 4 chunks) |
 |---|---|---|---|
-| Llama 3.2 **1B** Q4_K_M (default) | ~37 tok/s | ~10 tok/s | **~20–30 s** |
-| Llama 3.2 **3B** Q4_K_M (higher quality, slower) | ~20 tok/s | ~4 tok/s | ~60–105 s |
+| Llama 3.2 **3B** Q4_K_M (default — accuracy prioritized) | ~20 tok/s | ~4 tok/s | **~60–105 s** |
+| Llama 3.2 **1B** Q4_K_M (faster, less reliable) | ~37 tok/s | ~10 tok/s | ~20–30 s |
 | Any OpenAI-compatible backend (Groq, Ollama+GPU, llama-server) | — | — | ~1–5 s |
 
-Because reading the prompt is the slow part, `CONTEXT_TOKEN_BUDGET` is tuned down to ~900
-tokens (3 chunks) by default — doubling it would roughly double the wait before the first
-word appears. Switch to the 3B model (see `.env.example`) for noticeably better answers
-at ~3x the latency, or point `LLM_BACKEND=openai` at a GPU/hosted server to remove the
-CPU bottleneck entirely.
+The 3B model is the default: it reliably keeps multiple numbers/years straight in dense
+passages (e.g. "9.9% in 2027" vs "7.1% in 2026" in the same paragraph), whereas the 1B
+model occasionally attached the right figure to the wrong year. For a trading tool,
+getting the number right matters more than shaving ~40–75 seconds off each answer. Switch
+to the 1B model (see `.env.example`) if you need faster answers and can tolerate the
+occasional detail slip, or point `LLM_BACKEND=openai` at a GPU/hosted server to remove the
+CPU bottleneck entirely without trading off accuracy.
 
 ## Design decisions worth calling out
 

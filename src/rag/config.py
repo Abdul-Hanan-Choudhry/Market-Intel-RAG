@@ -25,11 +25,12 @@ class Settings(BaseSettings):
     embed_model: str = "BAAI/bge-small-en-v1.5"
     sparse_model: str = "Qdrant/bm25"
     rerank_model: str = "Xenova/ms-marco-MiniLM-L-6-v2"
-    # 1B is the default: ~3x faster than the 3B model on CPU (benchmarked: ~37 tok/s
-    # reading, ~10 tok/s writing vs ~20/~4 for the 3B) for a modest quality drop. Switch
-    # LLM_FILE back to the 3B file in .env if you have a GPU backend or don't mind the wait.
-    llm_repo: str = "bartowski/Llama-3.2-1B-Instruct-GGUF"
-    llm_file: str = "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+    # 3B is the default: noticeably more reliable than the 1B model at keeping multiple
+    # numbers/years straight in dense passages (the 1B model occasionally attaches the
+    # right figure to the wrong year). ~3x slower on CPU (~20 tok/s reading, ~4 tok/s
+    # writing vs ~37/~10 for 1B). Switch LLM_FILE to the 1B file in .env for speed instead.
+    llm_repo: str = "bartowski/Llama-3.2-3B-Instruct-GGUF"
+    llm_file: str = "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
     llm_ctx: int = 4096
     llm_threads: int = 4
 
@@ -43,13 +44,13 @@ class Settings(BaseSettings):
     # Generation (Phase 5). "local" runs the GGUF in-process; "openai" calls any
     # OpenAI-compatible server (llama.cpp server, Ollama, vLLM, Groq, OpenAI...).
     llm_backend: Literal["local", "openai"] = "local"
-    llm_max_tokens: int = 220
+    llm_max_tokens: int = 300
     llm_temperature: float = 0.1
     # CPU prompt reading runs at ~20-37 tok/s depending on model size, so every 100 context
     # tokens costs several seconds before the first word appears. Raise these on a GPU /
     # remote backend, where this cost disappears.
-    context_token_budget: int = 900
-    answer_k: int = 3
+    context_token_budget: int = 1200
+    answer_k: int = 4
     # If no new token arrives for this long, something is stuck (e.g. CPU starved by other
     # processes) - report an error instead of hanging the UI forever.
     llm_stall_timeout_s: float = 150.0
